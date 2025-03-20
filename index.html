@@ -101,35 +101,44 @@
             }
         }
  
-        async function exportToExcel() {
-            let loginData = JSON.parse(localStorage.getItem("loginHistory")) || [];
- 
-            if (loginData.length === 0) {
-                alert("No login records to export!");
-                return;
-            }
- 
-            let workbook = new ExcelJS.Workbook();
-            let worksheet = workbook.addWorksheet("Login History");
- 
-            worksheet.columns = [
-                { header: "Username", key: "username", width: 20 },
-                { header: "Login Time", key: "loginTime", width: 25 },
-                { header: "IP Address", key: "ipAddress", width: 20 },
-                { header: "Location", key: "location", width: 30 }
-            ];
- 
-            loginData.forEach(entry => worksheet.addRow(entry));
- 
-            // Protect Excel file with a password
-            worksheet.protect("manager123", { selectLockedCells: true });
- 
-            const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-            saveAs(blob, "Login_History_Protected.xlsx");
-        }
- 
-        displayLoginHistory(); // Initially display the login history
+     async function exportToExcel() {
+    // Retrieve all login data from localStorage
+    let loginData = JSON.parse(localStorage.getItem("loginHistory")) || [];
+
+    // Check if there's any data to export
+    if (loginData.length === 0) {
+        alert("No login records to export!");
+        return;
+    }
+
+    // Log the data for debugging purposes
+    console.log("Exporting login data:", loginData);
+
+    // Create a new workbook
+    let workbook = new ExcelJS.Workbook();
+    let worksheet = workbook.addWorksheet("Login History");
+
+    // Define columns for the Excel sheet
+    worksheet.columns = [
+        { header: "Username", key: "username", width: 20 },
+        { header: "Login Time", key: "loginTime", width: 25 },
+        { header: "IP Address", key: "ipAddress", width: 20 },
+        { header: "Location", key: "location", width: 30 }
+    ];
+
+    // Add each login record as a row in the worksheet
+    loginData.forEach(entry => {
+        worksheet.addRow(entry);
+    });
+
+    // Protect the sheet with a password for security
+    worksheet.protect("manager123", { selectLockedCells: true });
+
+    // Generate the Excel file and download it
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    saveAs(blob, "Login_History_Protected.xlsx");
+}
     </script>
  
 </body>
