@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Tracker with Secure Excel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+        input, button { margin: 5px; padding: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid black; padding: 8px; text-align: center; }
+    </style>
+</head>
+<body>
+ 
+    <h2>User Login</h2>
+    <input type="text" id="username" placeholder="Enter Username">
+    <input type="password" id="password" placeholder="Enter Password">
+    <button onclick="loginUser()">Login</button>
+ 
+    <h3>Login History</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Login Time</th>
+                <th>IP Address</th>
+                <th>Location</th>
+            </tr>
+        </thead>
+        <tbody id="loginHistory"></tbody>
+    </table>
+ 
+    <h2>Manager Access</h2>
+    <input type="password" id="managerPassword" placeholder="Enter Manager Password">
+    <button onclick="verifyManager()">Login as Manager</button>
+    <button id="exportButton" onclick="exportToExcel()" style="display:none;">Download Excel</button>
+ 
+    <script>
+        function displayLoginHistory() {
+            const loginHistory = document.getElementById("loginHistory");
+            loginHistory.innerHTML = "";
+ 
+            let loginData = JSON.parse(localStorage.getItem("loginHistory")) || [];
+ 
+            loginData.forEach(entry => {
+                const row = `<tr>
+                    <td>${entry.username}</td>
+                    <td>${entry.loginTime}</td>
+                    <td>${entry.ipAddress}</td>
+                    <td>${entry.location}</td>
+                </tr>`;
+                loginHistory.innerHTML += row;
+            });
+        }
+
+        function loginUser() {
+            const username = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
+ 
+            if (!username || !password) {
+                alert("Please enter a valid username and password!");
+                return;
+            }
+ 
+            const loginTime = new Date().toLocaleString();
+ 
+            fetch("https://ipapi.co/json/")
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Failed to fetch IP data");
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const ipAddress = data.ip;
+                    const location = `${data.city}, ${data.region}, ${data.country_name}`;
+ 
+                    let loginData = JSON.parse(localStorage.getItem("loginHistory")) || [];
+                    loginData.push({ username, loginTime, ipAddress, location });
+                    localStorage.setItem("loginHistory", JSON.stringify(loginData));
+ 
+                    displayLoginHistory(); // Make sure this is called after data is updated
+                })
+                .catch(error => {
+                    alert("Error fetching IP information: " + error.message);
+                });
+        }
+ 
+        function verifyManager() {
+            const managerPass = document.getElementById("managerPassword").value;
+            if (managerPass === "manager123") {
+                document.getElementById("exportButton").style.display = "block";
+                alert("Access granted! You can now download the Excel file.");
+            } else {
+                alert("Incorrect Manager Password!");
+            }
+        }
+ 
+        async function exportToExcel() {
+            let loginData = JSON.parse(localStorage.getItem("loginHistory")) || [];
+ 
+            if (loginData.length === 0) {
+                alert("No login records to export!");
+                return;
+            }
+ 
+            let workbook = new ExcelJS.Workbook();
+            let worksheet = workbook.addWorksheet("Login History");
+ 
+            worksheet.columns = [
+                { header: "Username", key: "username", width: 20 },
+                { header: "Login Time", key: "loginTime", width: 25 },
+                { header: "IP Address", key: "ipAddress", width: 20 },
+                { header: "Location", key: "location", width: 30 }
+            ];
+ 
+            loginData.forEach(entry => worksheet.addRow(entry));
+ 
+            // Protect Excel file with a password
+            worksheet.protect("manager123", { selectLockedCells: true });
+ 
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+            saveAs(blob, "Login_History_Protected.xlsx");
+        }
+ 
+        displayLoginHistory(); // Initially display the login history
+    </script>
+ 
+</body>
+</html>
