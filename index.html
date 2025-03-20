@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Tracker with Secure Excel</title>
+    <title>Login Tracker with Firebase and Excel Export</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
@@ -39,36 +40,56 @@
     <input type="password" id="managerPassword" placeholder="Enter Manager Password">
     <button onclick="verifyManager()">Login as Manager</button>
     <button id="exportButton" onclick="exportToExcel()" style="display:none;">Download Excel</button>
- 
+
     <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",  // Replace with your Firebase API key
+            authDomain: "YOUR_AUTH_DOMAIN",  // Replace with your Firebase Auth domain
+            databaseURL: "YOUR_DATABASE_URL",  // Replace with your Firebase Realtime Database URL
+            projectId: "YOUR_PROJECT_ID",  // Replace with your Firebase Project ID
+            storageBucket: "YOUR_STORAGE_BUCKET",  // Replace with your Firebase Storage Bucket
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",  // Replace with your Firebase Messaging Sender ID
+            appId: "YOUR_APP_ID"  // Replace with your Firebase App ID
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // Display login history from Firebase
         function displayLoginHistory() {
             const loginHistory = document.getElementById("loginHistory");
-            loginHistory.innerHTML = "";
- 
-            let loginData = JSON.parse(localStorage.getItem("loginHistory")) || [];
- 
-            loginData.forEach(entry => {
-                const row = `<tr>
-                    <td>${entry.username}</td>
-                    <td>${entry.loginTime}</td>
-                    <td>${entry.ipAddress}</td>
-                    <td>${entry.location}</td>
-                </tr>`;
-                loginHistory.innerHTML += row;
+            loginHistory.innerHTML = ""; // Clear the table body before displaying new data
+
+            const loginRef = db.ref("loginHistory");
+            loginRef.on("value", (snapshot) => {
+                const loginData = snapshot.val() || {}; // Get all login data
+                for (let key in loginData) {
+                    const entry = loginData[key];
+                    const row = `<tr>
+                        <td>${entry.username}</td>
+                        <td>${entry.loginTime}</td>
+                        <td>${entry.ipAddress}</td>
+                        <td>${entry.location}</td>
+                    </tr>`;
+                    loginHistory.innerHTML += row;
+                }
             });
         }
 
+        // Send login data to Firebase
         function loginUser() {
             const username = document.getElementById("username").value;
             const password = document.getElementById("password").value;
- 
+
             if (!username || !password) {
                 alert("Please enter a valid username and password!");
                 return;
             }
- 
+
             const loginTime = new Date().toLocaleString();
- 
+
             fetch("https://ipapi.co/json/")
                 .then(response => {
                     if (!response.ok) {
@@ -79,18 +100,25 @@
                 .then(data => {
                     const ipAddress = data.ip;
                     const location = `${data.city}, ${data.region}, ${data.country_name}`;
- 
-                    let loginData = JSON.parse(localStorage.getItem("loginHistory")) || [];
-                    loginData.push({ username, loginTime, ipAddress, location });
-                    localStorage.setItem("loginHistory", JSON.stringify(loginData));
- 
-                    displayLoginHistory(); // Make sure this is called after data is updated
+
+                    // Store login data in Firebase Realtime Database
+                    const loginRef = db.ref("loginHistory");
+                    loginRef.push({
+                        username,
+                        loginTime,
+                        ipAddress,
+                        location
+                    });
+
+                    alert("Login data stored successfully.");
+                    displayLoginHistory(); // Update the table after storing data
                 })
                 .catch(error => {
                     alert("Error fetching IP information: " + error.message);
                 });
         }
- 
+
+        // Verify manager password and enable Excel export
         function verifyManager() {
             const managerPass = document.getElementById("managerPassword").value;
             if (managerPass === "manager123") {
@@ -100,45 +128,40 @@
                 alert("Incorrect Manager Password!");
             }
         }
- 
-     async function exportToExcel() {
-    // Retrieve all login data from localStorage
-    let loginData = JSON.parse(localStorage.getItem("loginHistory")) || [];
 
-    // Check if there's any data to export
-    if (loginData.length === 0) {
-        alert("No login records to export!");
-        return;
-    }
+        // Export login data from Firebase to Excel
+        async function exportToExcel() {
+            const loginRef = db.ref("loginHistory");
+            const snapshot = await loginRef.once("value");
+            const loginData = snapshot.val() || [];
 
-    // Log the data for debugging purposes
-    console.log("Exporting login data:", loginData);
+            if (Object.keys(loginData).length === 0) {
+                alert("No login records to export!");
+                return;
+            }
 
-    // Create a new workbook
-    let workbook = new ExcelJS.Workbook();
-    let worksheet = workbook.addWorksheet("Login History");
+            let workbook = new ExcelJS.Workbook();
+            let worksheet = workbook.addWorksheet("Login History");
 
-    // Define columns for the Excel sheet
-    worksheet.columns = [
-        { header: "Username", key: "username", width: 20 },
-        { header: "Login Time", key: "loginTime", width: 25 },
-        { header: "IP Address", key: "ipAddress", width: 20 },
-        { header: "Location", key: "location", width: 30 }
-    ];
+            worksheet.columns = [
+                { header: "Username", key: "username", width: 20 },
+                { header: "Login Time", key: "loginTime", width: 25 },
+                { header: "IP Address", key: "ipAddress", width: 20 },
+                { header: "Location", key: "location", width: 30 }
+            ];
 
-    // Add each login record as a row in the worksheet
-    loginData.forEach(entry => {
-        worksheet.addRow(entry);
-    });
+            // Add each login entry to the worksheet
+            Object.values(loginData).forEach(entry => {
+                worksheet.addRow(entry);
+            });
 
-    // Protect the sheet with a password for security
-    worksheet.protect("manager123", { selectLockedCells: true });
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+            saveAs(blob, "Login_History_Protected.xlsx");
+        }
 
-    // Generate the Excel file and download it
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    saveAs(blob, "Login_History_Protected.xlsx");
-}
+        // Call this function on page load to display login history if available
+        displayLoginHistory();
     </script>
  
 </body>
